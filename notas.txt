@@ -1,0 +1,32 @@
+Notas del Capitulo 1: Repositorio curso-sig-juan verificado en WSL. Datos de Boyacá cargados correctamente.
+
+1. Control de versiones adaptado a datos espaciales:
+
+- Git  maneja con extrema eficiencia archivos de texto y código plano (.py, .html, .md, .geojson), permitiendo rastrear 
+  cada cambio de coordenadas o atributos. Sin embargo, los formatos binarios pesados (como los Shapefiles tradicionales
+  .shp/.shx/.dbf)  no  son  aptos  para  el versionado lineal tradicional, por lo que priorizar GeoJSON en repositorios 
+  ligeros optimiza el almacenamiento y evita la corrupción de datos.
+
+2. Trazabilidad y transparencia en la gestión territorial:
+
+- GitHub trasciende la función de un simple repositorio de código; en el ámbito técnico y de la administración pública, 
+  actúa  como  una  bitácora  transparente  de  auditoría  donde  cada  modificación en los límites, capas o metadatos 
+  territoriales  queda registrada con fecha, autor y justificación exacta (commit).
+
+3. GeoJSON como estándar nativo para la web espacial:
+
+- El uso de GeoJSON simplifica drásticamente la arquitectura de las aplicaciones web geográficas. Al combinar la geometría
+  vectorial  y los datos alfanuméricos en un estándar JSON, los navegadores y librerías como Leaflet pueden interpretarlos
+  directamente sin necesidad de servidores de mapas pesados para visualizaciones básicas.
+
+4. Ramas (branches) como entornos de prueba seguros:
+
+- La creación de ramas paralelas en Git permite experimentar con la estructuración de nuevas capas temáticas, estilizaciones
+  o  modificaciones en la interfaz del mapa web sin poner en riesgo la versión principal (main) que se encuentra publicada y 
+  activa en GitHub Pages.
+
+5. Automatización y reproducibilidad analítica:
+
+- Integrar repositorios de Git con flujos de trabajo automatizados (como GitHub Actions) garantiza que cualquier actualización
+  en  los scripts de procesamiento o en los conjuntos de datos geográficos se refleje de forma inmediata y reproducible en los 
+  visores cartográficos en línea.
