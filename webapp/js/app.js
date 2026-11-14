@@ -15,7 +15,7 @@ const departamentosWMS = L.tileLayer.wms(geoserverUrl, {
     layers: '8',
     format: 'image/png',
     transparent: true,
-    attribution: 'IGAC - Instituto Geográfico Agustín Codazzi'
+    attribution: 'DANE - Departamento Administrativo Nacional de Estadistica'
 }).addTo(map);
 
 // URL del servicio WFS
@@ -51,7 +51,7 @@ const municipiosWMS = L.tileLayer.wms(geoserverUrl, {
     layers: '7',
     format: 'image/png',
     transparent: true,
-    attribution: 'IGAC'
+    attribution: 'DANE - Departamento Administrativo Nacional de Estadistica'
 });
 
 // Capas base
