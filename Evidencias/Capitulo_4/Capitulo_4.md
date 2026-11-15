@@ -84,15 +84,15 @@ Igualmente se verifica su estado en el navedagor:
 
 ![][image12]
 
-[image1]: img/Capítulo 4_Página_1_Imagen_0001.png
-[image2]: img/Capítulo 4_Página_2_Imagen_0002.png
-[image3]: img/Capítulo 4_Página_2_Imagen_0003.png
-[image4]: img/Capítulo 4_Página_2_Imagen_0004.png
-[image5]: img/Capítulo 4_Página_3_Imagen_0005.png
-[image6]: img/Capítulo 4_Página_3_Imagen_0006.png
-[image7]: img/Capítulo 4_Página_3_Imagen_0007.png
-[image8]: img/Capítulo 4_Página_4_Imagen_0008.png
-[image9]: img/Capítulo 4_Página_4_Imagen_0009.png
-[image10]: img/Capítulo 4_Página_5_Imagen_0010.png
-[image11]: img/Capítulo 4_Página_5_Imagen_0011.png
-[image12]: img/Capítulo 4_Página_6_Imagen_0012.png
+[image1]: img/img_01.png
+[image2]: img/img_02.png
+[image3]: img/img_03.png
+[image4]: img/img_04.png
+[image5]: img/img_05.png
+[image6]: img/img_06.png
+[image7]: img/img_07.png
+[image8]: img/img_08.png
+[image9]: img/img_09.png
+[image10]: img/img_10.png
+[image11]: img/img_11.png
+[image12]: img/img_12.png
