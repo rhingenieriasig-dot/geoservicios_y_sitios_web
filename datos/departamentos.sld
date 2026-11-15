@@ -9,7 +9,7 @@
           <se:Name>Single symbol</se:Name>
           <se:PolygonSymbolizer>
             <se:Fill>
-              <se:SvgParameter name="fill">#e8f881</se:SvgParameter>
+              <se:SvgParameter name="fill">#FFD700</se:SvgParameter>
               <se:SvgParameter name="fill-opacity">0.8</se:SvgParameter>
             </se:Fill>
             <se:Stroke>
@@ -27,7 +27,7 @@
             </se:Label>
             <se:Font>
               <se:SvgParameter name="font-family">Open Sans</se:SvgParameter>
-              <se:SvgParameter name="font-size">13</se:SvgParameter>
+              <se:SvgParameter name="font-size">16</se:SvgParameter>
             </se:Font>
             <se:LabelPlacement>
               <se:PointPlacement>
