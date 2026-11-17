@@ -1,197 +1,134 @@
-// ============================================================
-// 1. INICIALIZACIÓN DEL MAPA Y CAPAS BASE
-// ============================================================
-const map = L.map('map').setView([5.53, -73.35], 8);
+// Crear el mapa centrado en el departamento de Boyacá (preferCanvas mejora el rendimiento con capas pesadas)
+const map = L.map('map', {
+    preferCanvas: true
+}).setView([5.53, -73.35], 8);
 
-const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
-});
+// URL del servicio WMS de GeoServer
+const geoserverUrl = 'https://geoportal.dane.gov.co/mparcgis/services/MGN2024/Serv_CapasMGN_2024/MapServer/WMSServer';
 
-const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri',
-    maxZoom: 19
-});
-
-const cartoLight = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
-    maxZoom: 19
-});
-
-// Agregar capa base por defecto (evita duplicados)
-osmLayer.addTo(map);
-
-// ============================================================
-// 2. SERVICIOS WMS EXTERNOS (DANE)
-// ============================================================
-const daneWmsUrl = 'https://geoportal.dane.gov.co/mparcgis/services/MGN2024/Serv_CapasMGN_2024/MapServer/WMSServer';
+// Código DANE del departamento a mostrar: Boyacá
 const BOYACA_CCDGO = '15';
-let boyacaBounds = null;
 
-const departamentosWMS = L.tileLayer.wms(daneWmsUrl, {
+// Agregar capa WMS de departamentos
+// Nota: el servicio es un ArcGIS MapServer WMS y no admite filtros por atributo (CQL),
+// por lo que se restringe la carga de teselas a la extensión de Boyacá mediante 'bounds'.
+const departamentosWMS = L.tileLayer.wms(geoserverUrl, {
     layers: '8',
     format: 'image/png',
     transparent: true,
-    attribution: 'DANE - MGN 2024'
-});
-
-const municipiosWMS = L.tileLayer.wms(daneWmsUrl, {
-    layers: '7',
-    format: 'image/png',
-    transparent: true,
-    attribution: 'DANE - MGN 2024'
-}).addTo(map); // Activado por defecto para ver división municipal
-
-// ============================================================
-// 3. CONTROL DE CAPAS
-// ============================================================
-const baseMaps = {
-    "OpenStreetMap": osmLayer,
-    "Mapa Claro (Carto)": cartoLight,
-    "Satélite (Esri)": satelliteLayer
-};
-
-const overlayMaps = {
-    "Límite Departamental (WMS)": departamentosWMS,
-    "Municipios (WMS)": municipiosWMS
-};
-
-const controlLayer = L.control.layers(baseMaps, overlayMaps, {
-    collapsed: window.innerWidth < 768 // Colapsado automáticamente en móviles
+    attribution: 'DANE - Departamento Administrativo Nacional de Estadística'
 }).addTo(map);
 
-// ============================================================
-// 4. CONTROLES DE INTERFAZ (INFO, LEYENDA, ESCALA, HOME)
-// ============================================================
-L.control.scale({ position: 'bottomleft', metric: true, imperial: false }).addTo(map);
+// URL del servicio WFS
+const departamentosWFSUrl = 'datos/departamentos.geojson'; // Cambia esto a la URL de tu servicio WFS
+let departamentosGeoJSON; // Variable para almacenar la capa GeoJSON
 
-// Panel de información dinámico
-const info = L.control({ position: 'topleft' });
-info.onAdd = function () {
-    this._div = L.DomUtil.create('div', 'info');
-    this.update();
-    return this._div;
-};
-info.update = function (props) {
-    this._div.innerHTML = `
-        <h4>Geovisor Boyacá</h4>
-        ${props
-            ? `<b>${props.dpto_cnmbr || props.mpio_cnmbr}</b><br>Código DANE: ${props.dpto_ccdgo || props.mpio_ccdgo}`
-            : '<span>Pasa el cursor o haz clic sobre una entidad</span>'}
-        <div id="loading-status" style="display:none; color:#d84315; font-weight:bold; margin-top:5px;">
-            ⏳ Descargando capa...
-        </div>
-        <p style="margin-top:6px; font-size:11px; color:#666;">Fuentes: DANE / IGAC</p>
-    `;
-};
-info.addTo(map);
-
-// Botón para restaurar zoom a todo Boyacá
-const homeControl = L.control({ position: 'topleft' });
-homeControl.onAdd = function () {
-    const btn = L.DomUtil.create('button', 'leaflet-bar leaflet-control');
-    btn.innerHTML = '⌂';
-    btn.title = 'Centrar en Boyacá';
-    btn.style.cssText = 'width:30px; height:30px; font-size:18px; cursor:pointer; background:#fff; border:none;';
-    btn.onclick = () => { if (boyacaBounds) map.fitBounds(boyacaBounds); };
-    return btn;
-};
-homeControl.addTo(map);
-
-// Leyenda cartográfica
-const legend = L.control({ position: 'bottomright' });
-legend.onAdd = function () {
-    const div = L.DomUtil.create('div', 'info legend');
-    const items = [
-        { color: '#e8f881', border: '#232323', label: 'Límite Boyacá', tipo: 'box' },
-        { color: '#66bb6a', border: '#1b5e20', label: 'Bosques', tipo: 'box' },
-        { color: '#e65100', label: 'Vías', tipo: 'line' },
-        { color: '#1e88e5', label: 'Drenaje sencillo', tipo: 'line' },
-        { color: '#8d6e63', label: 'Curvas de nivel', tipo: 'line' },
-        { color: '#c62828', label: 'Topónimos', tipo: 'circle' },
-        { color: '#6d4c41', label: 'Construcciones', tipo: 'circle' }
-    ];
-
-    div.innerHTML = '<strong>Simbología</strong><br>';
-    items.forEach(item => {
-        if (item.tipo === 'box') {
-            div.innerHTML += `<i style="background:${item.color}; border:1px solid ${item.border};"></i> ${item.label}<br>`;
-        } else if (item.tipo === 'line') {
-            div.innerHTML += `<i style="background:${item.color}; height:3px; margin-top:7px;"></i> ${item.label}<br>`;
-        } else {
-            div.innerHTML += `<i style="background:${item.color}; border-radius:50%; width:10px; height:10px; margin:4px 12px 0 4px;"></i> ${item.label}<br>`;
-        }
-    });
-    return div;
-};
-legend.addTo(map);
-
-// ============================================================
-// 5. CARGA DE LÍMITE DEPARTAMENTAL (GEOJSON / WFS)
-// ============================================================
-const departamentosWFSUrl = 'datos/departamentos.geojson';
-let departamentosGeoJSON;
-
+// Cargar y mostrar departamentos como GeoJSON
 fetch(departamentosWFSUrl)
-    .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
+        // Crear capa GeoJSON (solo Boyacá)
         departamentosGeoJSON = L.geoJSON(data, {
             filter: feature => feature.properties.dpto_ccdgo === BOYACA_CCDGO,
             style: {
-                color: '#232323',
+                color: '#1b5e20',
                 weight: 2.5,
                 fillColor: '#e8f881',
-                fillOpacity: 0.25
+                fillOpacity: 0.12
             },
-            onEachFeature: (feature, layer) => {
-                layer.bindPopup(`
-                    <div style="text-align:center;">
-                        <h3 style="margin:0 0 4px;">${feature.properties.dpto_cnmbr}</h3>
-                        <p style="margin:0;"><strong>Código DANE:</strong> ${feature.properties.dpto_ccdgo}</p>
-                    </div>
-                `);
-                layer.on({
-                    mouseover: e => {
-                        e.target.setStyle({ weight: 4, color: '#000', fillOpacity: 0.4 });
-                        info.update(e.target.feature.properties);
-                    },
-                    mouseout: e => {
-                        departamentosGeoJSON.resetStyle(e.target);
-                        info.update();
-                    },
-                    click: e => map.fitBounds(e.target.getBounds())
-                });
-            }
-        }).addTo(map);
+            onEachFeature: onEachFeature
+        });
 
-        controlLayer.addOverlay(departamentosGeoJSON, "Boyacá (Vectorial)");
+        // Agregar al mapa
+        departamentosGeoJSON.addTo(map);
+        controlLayer.addOverlay(departamentosGeoJSON, "Departamentos (WFS)"); // Agregar al control de capas
 
-        boyacaBounds = departamentosGeoJSON.getBounds();
+        // Extensión de Boyacá
+        const boyacaBounds = departamentosGeoJSON.getBounds();
+
+        // Restringir las teselas de ambos WMS a la extensión de Boyacá
         departamentosWMS.options.bounds = boyacaBounds;
+        departamentosWMS.redraw();
         municipiosWMS.options.bounds = boyacaBounds;
-        municipiosWMS.redraw();
+
+        // Centrar la vista en el departamento de Boyacá
         map.fitBounds(boyacaBounds);
     })
-    .catch(error => console.error('Error cargando límite departamental:', error));
+    .catch(error => console.error('Error cargando WFS:', error));
+
+// Agregar capa WMS de municipios
+const municipiosWMS = L.tileLayer.wms(geoserverUrl, {
+    layers: '7',
+    format: 'image/png',
+    transparent: true,
+    attribution: 'DANE - Departamento Administrativo Nacional de Estadística'
+});
+
+// Capas base
+const baseMaps = {
+    "OpenStreetMap": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+    }),
+    "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri',
+        maxZoom: 19
+    })
+};
+
+// Capas superpuestas
+let overlayMaps = {
+    "Departamentos": departamentosWMS,    
+    "Municipios": municipiosWMS
+};
+
+// Agregar control de capas
+const controlLayer = L.control.layers(baseMaps, overlayMaps, {
+    collapsed: false
+}).addTo(map);
+
+// Agregar capa base por defecto (sin duplicar la instancia inicial)
+baseMaps["OpenStreetMap"].addTo(map);
 
 // ============================================================
-// 6. CAPAS DETALLADAS DE BOYACÁ (CARGA DIFERIDA / LAZY LOADING)
+// Capas detalladas de Boyacá (cartografía base IGAC/DANE)
+// Datos recortados por departamento en datos/15_BOYACA/.
+// Se cargan de forma diferida (lazy): solo se descarga el GeoJSON
+// cuando el usuario activa la capa en el control, porque algunas
+// (Drenaje, Curvas de Nivel, Vías) pesan varios MB.
 // ============================================================
-// Nota: Se recomienda renombrar la carpeta a 'datos/15_BOYACA/' sin tilde
-const boyacaDataDir = 'datos/15_BOYACA/';
+// Nota: Verifica que la carpeta en GitHub se llame '15_BOYACA' (sin tilde) para evitar errores 404
+const boyacaDataDir = 'datos/15_BOYACÁ/';
+let toponimosLayer = null; // Referencia para el buscador de lugares
 
 const capasBoyaca = [
-    { file: 'Administrativo_P.geojson', label: 'Topónimos administrativos', color: '#c62828', radio: 4 },
-    { file: 'Construccion_P.geojson', label: 'Construcciones', color: '#6d4c41', radio: 3 },
-    { file: 'Via.geojson', label: 'Vías', estilo: { color: '#e65100', weight: 1.5 } },
-    { file: 'Drenaje_Sencillo.geojson', label: 'Drenaje sencillo', estilo: { color: '#1e88e5', weight: 1 } },
-    { file: 'Curva_Nivel.geojson', label: 'Curvas de nivel', estilo: { color: '#8d6e63', weight: 0.8 } },
-    { file: 'Bosque.geojson', label: 'Bosques', estilo: { color: '#1b5e20', weight: 1, fillColor: '#66bb6a', fillOpacity: 0.4 } }
+    {
+        file: 'Administrativo_P.geojson', label: 'Topónimos administrativos',
+        tipo: 'punto', color: '#c62828', radio: 4
+    },
+    {
+        file: 'Construccion_P.geojson', label: 'Construcciones',
+        tipo: 'punto', color: '#6d4c41', radio: 3
+    },
+    {
+        file: 'Via.geojson', label: 'Vías',
+        tipo: 'linea', estilo: { color: '#e65100', weight: 1.5 }
+    },
+    {
+        file: 'Drenaje_Sencillo.geojson', label: 'Drenaje sencillo',
+        tipo: 'linea', estilo: { color: '#1e88e5', weight: 1 }
+    },
+    {
+        file: 'Curva_Nivel.geojson', label: 'Curvas de nivel',
+        tipo: 'linea', estilo: { color: '#8d6e63', weight: 0.8 }
+    },
+    {
+        file: 'Bosque.geojson', label: 'Bosques',
+        tipo: 'poligono', estilo: { color: '#1b5e20', weight: 1, fillColor: '#66bb6a', fillOpacity: 0.4 }
+    }
 ];
 
+// Construye el contenido del popup a partir de los atributos más relevantes
 function popupBoyaca(props) {
     const campos = [
         ['NOMBRE_GEO', 'Nombre'],
@@ -206,16 +143,20 @@ function popupBoyaca(props) {
     const filas = campos
         .filter(([k]) => props[k] !== undefined && props[k] !== null && props[k] !== '')
         .map(([k, etiqueta]) => `<p style="margin:2px 0"><strong>${etiqueta}:</strong> ${props[k]}</p>`);
-    return filas.length ? `<div>${filas.join('')}</div>` : '<div>Sin atributos disponibles</div>';
+    return filas.length ? `<div>${filas.join('')}</div>` : '<div>Sin atributos</div>';
 }
 
-function cargarCapaBoyaca(cfg) {
-    const loader = document.getElementById('loading-status');
-    if (loader) loader.style.display = 'block';
+// Carga (una sola vez) el GeoJSON de una capa dentro de su layerGroup
+function cargarCapaBoyaca(cfg, onComplete) {
+    const infoDiv = document.querySelector('.info');
+    const loadingId = `loading-${cfg.file.replace('.', '-')}`;
+    if (infoDiv && !document.getElementById(loadingId)) {
+        infoDiv.innerHTML += `<p id="${loadingId}" style="color:#d84315; margin:4px 0 0 0; font-weight:bold;">⏳ Cargando ${cfg.label}...</p>`;
+    }
 
     fetch(boyacaDataDir + cfg.file)
         .then(response => {
-            if (!response.ok) throw new Error(`No se encontró ${cfg.file}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
         })
         .then(data => {
@@ -235,22 +176,29 @@ function cargarCapaBoyaca(cfg) {
                 }
             });
             capa.addTo(cfg._group);
+            if (cfg.file === 'Administrativo_P.geojson') {
+                toponimosLayer = capa;
+            }
+            if (onComplete) onComplete(capa);
         })
         .catch(error => {
             console.error('Error cargando capa ' + cfg.file + ':', error);
-            alert(`Error al cargar la capa "${cfg.label}". Verifica que el archivo exista.`);
+            alert(`No se pudo cargar la capa "${cfg.label}". Verifica la ruta del archivo.`);
         })
         .finally(() => {
-            if (loader) loader.style.display = 'none';
+            const msg = document.getElementById(loadingId);
+            if (msg) msg.remove();
         });
 }
 
+// Registrar cada capa como overlay con carga diferida
 capasBoyaca.forEach(cfg => {
     cfg._group = L.layerGroup();
     cfg._loaded = false;
     controlLayer.addOverlay(cfg._group, cfg.label);
 });
 
+// Al activar una capa por primera vez, descargar su GeoJSON
 map.on('overlayadd', function (e) {
     const cfg = capasBoyaca.find(c => c._group === e.layer);
     if (cfg && !cfg._loaded) {
@@ -259,77 +207,187 @@ map.on('overlayadd', function (e) {
     }
 });
 
-// ============================================================
-// 7. BUSCADOR DE TOPÓNIMOS / ENTIDADES
-// ============================================================
-const searchControl = L.control({ position: 'topright' });
-searchControl.onAdd = function () {
-    const div = L.DomUtil.create('div', 'info search-control');
+function onEachFeature(feature, layer) {
+    // Popup al hacer clic
+    if (feature.properties) {
+        const popupContent = `
+            <div style="text-align: center;">
+                <h3>${feature.properties.dpto_cnmbr}</h3>
+                <p><strong>Código:</strong> ${feature.properties.dpto_ccdgo}</p>
+            </div>
+        `;
+        layer.bindPopup(popupContent);
+    }
+
+    // Highlight al pasar el mouse
+    layer.on({
+        mouseover: highlightFeature,
+        mouseout: resetHighlight,
+        click: zoomToFeature
+    });
+}
+
+function highlightFeature(e) {
+    const layer = e.target;
+
+    layer.setStyle({
+        weight: 4,
+        color: '#2e7d32',
+        fillOpacity: 0.25
+    });
+
+    layer.bringToFront();
+}
+
+function resetHighlight(e) {
+    const layer = e.target;
+    layer.setStyle({
+        weight: 2.5,
+        color: '#1b5e20',
+        fillOpacity: 0.12
+    });
+}
+
+function zoomToFeature(e) {
+    map.fitBounds(e.target.getBounds());
+}
+
+// Control de escala
+L.control.scale({
+    position: 'bottomleft',
+    metric: true,
+    imperial: false
+}).addTo(map);
+
+// Panel de información
+const info = L.control({position: 'topleft'});
+
+info.onAdd = function (map) {
+    this._div = L.DomUtil.create('div', 'info');
+    this._div.innerHTML = `
+        <h4>Boyacá - Servicios Geográficos</h4>
+        <p>Visualización del departamento y sus municipios</p>
+        <p><small>Datos: DANE - IGAC | Servidor: GeoServer / ArcGIS</small></p>
+    `;
+    return this._div;
+};
+
+info.addTo(map);
+
+// Leyenda cartográfica dinámica
+const legend = L.control({position: 'bottomright'});
+
+legend.onAdd = function (map) {
+    const div = L.DomUtil.create('div', 'info legend');
+    div.style.background = 'rgba(255, 255, 255, 0.92)';
+    div.style.padding = '8px 12px';
+    div.style.borderRadius = '6px';
+    div.style.boxShadow = '0 1px 5px rgba(0,0,0,0.3)';
+    div.innerHTML = '<h4 style="margin:0 0 6px 0; font-size:13px;">Convenciones IGAC</h4>';
+
+    capasBoyaca.forEach(cfg => {
+        const color = cfg.color || cfg.estilo.color;
+        const forma = cfg.tipo === 'punto'
+            ? 'border-radius:50%; width:10px; height:10px; margin:0 8px 0 2px;'
+            : (cfg.tipo === 'linea'
+                ? 'height:3px; width:14px; margin-right:6px;'
+                : 'width:14px; height:14px; margin-right:6px; border-radius:2px;');
+
+        div.innerHTML += `
+            <div style="display:flex; align-items:center; margin-bottom:4px;">
+                <span style="display:inline-block; background:${color}; ${forma}"></span>
+                <small style="font-size:11px;">${cfg.label}</small>
+            </div>
+        `;
+    });
+
+    return div;
+};
+
+legend.addTo(map);
+
+// Crear control de búsqueda
+const searchControl = L.control({position: 'topright'});
+
+searchControl.onAdd = function (map) {
+    const div = L.DomUtil.create('div', 'search-control');
     div.innerHTML = `
-        <input type="text" id="search-input" placeholder="Buscar municipio o lugar..." style="padding:4px; border:1px solid #ccc; border-radius:3px;">
-        <button id="search-button" style="padding:4px 8px; cursor:pointer;">Buscar</button>
+        <input type="text" id="search-input" placeholder="Buscar lugar o departamento...">
+        <button id="search-button">Buscar</button>
     `;
     L.DomEvent.disableClickPropagation(div);
     return div;
 };
+
 searchControl.addTo(map);
 
-// Si tienes un archivo datos/municipios_boyaca.geojson, cárgalo aquí para habilitar la búsqueda municipal
-let municipiosBoyacaLayer = null;
-fetch('datos/municipios_boyaca.geojson')
-    .then(r => r.ok ? r.json() : null)
-    .then(data => {
-        if (!data) return;
-        municipiosBoyacaLayer = L.geoJSON(data, {
-            style: { color: '#555', weight: 1, fillOpacity: 0.05 },
-            onEachFeature: (f, l) => {
-                l.bindPopup(`<b>Municipio:</b> ${f.properties.mpio_cnmbr}<br><b>Código:</b> ${f.properties.mpio_ccdgo}`);
-                l.on({
-                    mouseover: e => info.update(e.target.feature.properties),
-                    mouseout: () => info.update()
-                });
-            }
-        });
-        controlLayer.addOverlay(municipiosBoyacaLayer, "Municipios Boyacá (Búsqueda)");
-    })
-    .catch(() => { /* Opcional: si no existe el archivo, el buscador usará departamentosGeoJSON */ });
-
-document.addEventListener('DOMContentLoaded', function () {
+// Función de búsqueda (busca en Topónimos de Boyacá y en Departamentos)
+document.addEventListener('DOMContentLoaded', function() {
     const searchButton = document.getElementById('search-button');
     const searchInput = document.getElementById('search-input');
+
+    function ejecutarBusqueda(searchText) {
+        let encontrado = null;
+
+        // 1. Buscar primero en topónimos administrativos de Boyacá (si están cargados)
+        if (toponimosLayer) {
+            toponimosLayer.eachLayer(function(layer) {
+                const nombreGeo = (layer.feature.properties.NOMBRE_GEO || '').toLowerCase();
+                if (!encontrado && nombreGeo.includes(searchText)) {
+                    encontrado = layer;
+                }
+            });
+        }
+
+        if (encontrado) {
+            if (!map.hasLayer(toponimosLayer)) {
+                toponimosLayer.addTo(map);
+            }
+            map.setView(encontrado.getLatLng(), 13);
+            encontrado.openPopup();
+            return;
+        }
+
+        // 2. Si no está en topónimos, buscar en la capa de departamentos
+        if (departamentosGeoJSON) {
+            departamentosGeoJSON.eachLayer(function(layer) {
+                const nombre = (layer.feature.properties.dpto_cnmbr || '').toLowerCase();
+                if (!encontrado && nombre.includes(searchText)) {
+                    encontrado = layer;
+                }
+            });
+        }
+
+        if (encontrado) {
+            map.fitBounds(encontrado.getBounds());
+            encontrado.openPopup();
+        } else {
+            alert('No se encontró: ' + searchInput.value);
+        }
+    }
 
     function buscar() {
         const searchText = searchInput.value.trim().toLowerCase();
         if (!searchText) return;
 
-        const capaObjetivo = municipiosBoyacaLayer || departamentosGeoJSON;
-        if (!capaObjetivo) return;
-
-        let encontrado = null;
-        capaObjetivo.eachLayer(function (layer) {
-            const props = layer.feature.properties;
-            const nombre = (props.mpio_cnmbr || props.dpto_cnmbr || '').toLowerCase();
-            if (!encontrado && nombre.includes(searchText)) {
-                encontrado = layer;
-            }
-        });
-
-        if (encontrado) {
-            if (!map.hasLayer(capaObjetivo)) capaObjetivo.addTo(map);
-            map.fitBounds(encontrado.getBounds());
-            encontrado.openPopup();
+        // Si la capa de topónimos aún no se ha descargado, la carga automáticamente antes de buscar
+        const cfgToponimos = capasBoyaca.find(c => c.file === 'Administrativo_P.geojson');
+        if (cfgToponimos && !cfgToponimos._loaded) {
+            cfgToponimos._loaded = true;
+            cfgToponimos._group.addTo(map);
+            cargarCapaBoyaca(cfgToponimos, () => ejecutarBusqueda(searchText));
         } else {
-            alert('No se encontró coincidencia para: ' + searchInput.value);
+            ejecutarBusqueda(searchText);
         }
     }
 
     searchButton.addEventListener('click', buscar);
-    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') buscar(); });
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') buscar();
+    });
 });
 
-// ============================================================
-// 8. MARCADOR CAPITAL
-// ============================================================
-L.marker([5.5353, -73.3678])
+// Marcador de Tunja (capital de Boyacá)
+const TunjaMarker = L.marker([5.53, -73.35])
     .addTo(map)
-    .bindPopup('<b>Tunja</b><br>Capital del departamento de Boyacá');
+    .bindPopup('<b>Tunja</b><br>Capital de Boyacá');
