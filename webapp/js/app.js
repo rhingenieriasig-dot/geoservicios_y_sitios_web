@@ -56,92 +56,6 @@ fetch(departamentosWFSUrl)
     })
     .catch(error => console.error('Error cargando WFS:', error));
 
-// ============================================================
-// [NUEVO - MUNICIPIOS] Cargar capa vectorial de Municipios de Boyacá
-// ============================================================
-const municipiosWFSUrl = 'datos/municipios_boyaca.geojson'; // O URL WFS con &cql_filter=dpto_ccdgo='15'
-let municipiosGeoJSON;
-let municipioResaltado = null; // Guarda el último municipio iluminado por el buscador
-
-const estiloMunicipioBase = {
-    color: '#455a64',
-    weight: 1,
-    fillColor: '#90a4ae',
-    fillOpacity: 0.05
-};
-
-const estiloMunicipioIluminado = {
-    color: '#d84315',
-    weight: 3.5,
-    fillColor: '#ffab40',
-    fillOpacity: 0.45
-};
-
-function iluminarMunicipio(layer) {
-    // Restaurar el estilo del municipio que estaba iluminado anteriormente
-    if (municipioResaltado && municipiosGeoJSON) {
-        municipiosGeoJSON.resetStyle(municipioResaltado);
-    }
-    // Aplicar estilo de resaltado al nuevo municipio y traerlo al frente
-    layer.setStyle(estiloMunicipioIluminado);
-    layer.bringToFront();
-    municipioResaltado = layer;
-}
-
-fetch(municipiosWFSUrl)
-    .then(response => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
-    })
-    .then(data => {
-        municipiosGeoJSON = L.geoJSON(data, {
-            // Filtra por Boyacá en caso de que el GeoJSON contenga todo el país
-            filter: feature => {
-                const codDpto = feature.properties.dpto_ccdgo || feature.properties.DPTO_CCDGO;
-                return !codDpto || codDpto === BOYACA_CCDGO;
-            },
-            style: estiloMunicipioBase,
-            onEachFeature: function(feature, layer) {
-                const props = feature.properties;
-                const nombreMpio = props.mpio_cnmbr || props.MPIO_CNMBR || 'Sin nombre';
-                const codigoMpio = props.mpio_ccdgo || props.MPIO_CCDGO || '';
-
-                layer.bindPopup(`
-                    <div style="text-align: center;">
-                        <h4 style="margin:0 0 4px 0;">${nombreMpio}</h4>
-                        <p style="margin:0;"><strong>Código DANE:</strong> ${codigoMpio}</p>
-                    </div>
-                `);
-
-                layer.on({
-                    mouseover: function(e) {
-                        if (e.target !== municipioResaltado) {
-                            e.target.setStyle({
-                                weight: 2.5,
-                                color: '#263238',
-                                fillOpacity: 0.2
-                            });
-                        }
-                    },
-                    mouseout: function(e) {
-                        if (e.target !== municipioResaltado) {
-                            municipiosGeoJSON.resetStyle(e.target);
-                        }
-                    },
-                    click: function(e) {
-                        iluminarMunicipio(e.target);
-                        map.fitBounds(e.target.getBounds());
-                    }
-                });
-            }
-        });
-
-        // Agregar al mapa y al control de capas
-        municipiosGeoJSON.addTo(map);
-        controlLayer.addOverlay(municipiosGeoJSON, "Municipios Boyacá (WFS)");
-    })
-    .catch(error => console.error('Error cargando Municipios GeoJSON:', error));
-
 // Agregar capa WMS de municipios
 const municipiosWMS = L.tileLayer.wms(geoserverUrl, {
     layers: '7',
@@ -371,14 +285,6 @@ legend.onAdd = function (map) {
     div.style.boxShadow = '0 1px 5px rgba(0,0,0,0.3)';
     div.innerHTML = '<h4 style="margin:0 0 6px 0; font-size:13px;">Convenciones IGAC</h4>';
 
-    // [NUEVO - MUNICIPIOS] Símbolo de Municipios en la leyenda
-    div.innerHTML += `
-        <div style="display:flex; align-items:center; margin-bottom:4px;">
-            <span style="display:inline-block; background:#90a4ae; border:1px solid #455a64; width:14px; height:14px; margin-right:6px; border-radius:2px;"></span>
-            <small style="font-size:11px;">Municipios de Boyacá</small>
-        </div>
-    `;
-
     capasBoyaca.forEach(cfg => {
         const color = cfg.color || cfg.estilo.color;
         const forma = cfg.tipo === 'punto'
@@ -406,7 +312,7 @@ const searchControl = L.control({position: 'topright'});
 searchControl.onAdd = function (map) {
     const div = L.DomUtil.create('div', 'search-control');
     div.innerHTML = `
-        <input type="text" id="search-input" placeholder="Buscar municipio o lugar...">
+        <input type="text" id="search-input" placeholder="Buscar lugar o departamento...">
         <button id="search-button">Buscar</button>
     `;
     L.DomEvent.disableClickPropagation(div);
@@ -415,47 +321,19 @@ searchControl.onAdd = function (map) {
 
 searchControl.addTo(map);
 
-// Función de búsqueda (busca en Municipios de Boyacá, Topónimos y Departamentos)
+// Función de búsqueda (busca en Topónimos de Boyacá y en Departamentos)
 document.addEventListener('DOMContentLoaded', function() {
     const searchButton = document.getElementById('search-button');
     const searchInput = document.getElementById('search-input');
 
-    // Función auxiliar para ignorar tildes al buscar (ej: "sogamoso" o "tunja" o "duitama" o "chiquinquira")
-    function normalizarTexto(texto) {
-        return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-    }
-
     function ejecutarBusqueda(searchText) {
-        const textoNormalizado = normalizarTexto(searchText);
         let encontrado = null;
 
-        // 1. [NUEVO - MUNICIPIOS] Buscar primero en la capa de Municipios de Boyacá
-        if (municipiosGeoJSON) {
-            municipiosGeoJSON.eachLayer(function(layer) {
-                const props = layer.feature.properties;
-                const nombreMpio = normalizarTexto(props.mpio_cnmbr || props.MPIO_CNMBR || '');
-                if (!encontrado && nombreMpio.includes(textoNormalizado)) {
-                    encontrado = layer;
-                }
-            });
-        }
-
-        if (encontrado) {
-            // Si el usuario había desactivado la capa de municipios, volver a activarla
-            if (!map.hasLayer(municipiosGeoJSON)) {
-                municipiosGeoJSON.addTo(map);
-            }
-            iluminarMunicipio(encontrado);
-            map.fitBounds(encontrado.getBounds());
-            encontrado.openPopup();
-            return;
-        }
-
-        // 2. Buscar en topónimos administrativos de Boyacá (si están cargados)
+        // 1. Buscar primero en topónimos administrativos de Boyacá (si están cargados)
         if (toponimosLayer) {
             toponimosLayer.eachLayer(function(layer) {
-                const nombreGeo = normalizarTexto(layer.feature.properties.NOMBRE_GEO || '');
-                if (!encontrado && nombreGeo.includes(textoNormalizado)) {
+                const nombreGeo = (layer.feature.properties.NOMBRE_GEO || '').toLowerCase();
+                if (!encontrado && nombreGeo.includes(searchText)) {
                     encontrado = layer;
                 }
             });
@@ -470,11 +348,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
-        // 3. Si no está en municipios ni en topónimos, buscar en departamentos
+        // 2. Si no está en topónimos, buscar en la capa de departamentos
         if (departamentosGeoJSON) {
             departamentosGeoJSON.eachLayer(function(layer) {
-                const nombre = normalizarTexto(layer.feature.properties.dpto_cnmbr || '');
-                if (!encontrado && nombre.includes(textoNormalizado)) {
+                const nombre = (layer.feature.properties.dpto_cnmbr || '').toLowerCase();
+                if (!encontrado && nombre.includes(searchText)) {
                     encontrado = layer;
                 }
             });
@@ -489,24 +367,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function buscar() {
-        const searchText = searchInput.value.trim();
+        const searchText = searchInput.value.trim().toLowerCase();
         if (!searchText) return;
 
-        // Si existe en municipios, ejecuta de inmediato sin descargar topónimos innecesariamente
-        if (municipiosGeoJSON) {
-            const textoNorm = normalizarTexto(searchText);
-            let existeEnMunicipios = false;
-            municipiosGeoJSON.eachLayer(layer => {
-                const nombreMpio = normalizarTexto(layer.feature.properties.mpio_cnmbr || layer.feature.properties.MPIO_CNMBR || '');
-                if (nombreMpio.includes(textoNorm)) existeEnMunicipios = true;
-            });
-            if (existeEnMunicipios) {
-                ejecutarBusqueda(searchText);
-                return;
-            }
-        }
-
-        // Si no es un municipio y la capa de topónimos aún no se ha descargado, la carga antes de buscar
+        // Si la capa de topónimos aún no se ha descargado, la carga automáticamente antes de buscar
         const cfgToponimos = capasBoyaca.find(c => c.file === 'Administrativo_P.geojson');
         if (cfgToponimos && !cfgToponimos._loaded) {
             cfgToponimos._loaded = true;
