@@ -391,3 +391,5 @@ document.addEventListener('DOMContentLoaded', function() {
 const TunjaMarker = L.marker([5.53, -73.35])
     .addTo(map)
     .bindPopup('<b>Tunja</b><br>Capital de Boyacá');
+
+    
